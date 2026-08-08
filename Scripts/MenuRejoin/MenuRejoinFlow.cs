@@ -337,7 +337,7 @@ internal sealed partial class NetUpdatePump : Node
             var pump = new NetUpdatePump
             {
                 _service = service,
-                Name = "AutoReconnect_NetPump"
+                Name = "AutoReconnectMin_NetPump"
             };
             tree.Root.AddChild(pump);
             return pump;

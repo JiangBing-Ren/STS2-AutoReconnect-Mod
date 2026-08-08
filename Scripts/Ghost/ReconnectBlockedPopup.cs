@@ -211,7 +211,7 @@ internal static class ReconnectBlockedPopup
             }
 
             var tree = Engine.GetMainLoop() as SceneTree;
-            var existing = tree?.Root.GetNodeOrNull("AutoReconnect_Runner");
+            var existing = tree?.Root.GetNodeOrNull("AutoReconnectMin_Runner");
             if (existing != null)
             {
                 // 通过 _isRunning 私有字段判断旧 runner 是否还在跑：
@@ -233,7 +233,7 @@ internal static class ReconnectBlockedPopup
                 }
 
                 existing.QueueFree();
-                Diag.Log("[AutoReconnect] 清理已放弃的旧 AutoReconnect_Runner，准备重新启动。");
+                Diag.Log("[AutoReconnect] 清理已放弃的旧 AutoReconnectMin_Runner，准备重新启动。");
             }
 
             // 延迟一帧：等旧节点 QueueFree 完成、名字释放后再添加新节点，
@@ -262,7 +262,7 @@ internal static class ReconnectBlockedPopup
         try
         {
             var node = new ReconnectRunner();
-            node.Name = "AutoReconnect_Runner";
+            node.Name = "AutoReconnectMin_Runner";
             // 点击“重试”时从当前 NetService 捕获主机 Steam ID，供 FromPlayer 重建连接。
             try
             {

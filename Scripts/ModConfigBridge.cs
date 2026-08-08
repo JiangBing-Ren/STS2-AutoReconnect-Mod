@@ -91,8 +91,8 @@ internal static class ModConfigBridge
 
             var displayNames = new Dictionary<string, string>
             {
-                ["en"] = "Auto Reconnect",
-                ["zhs"] = "自动重连",
+                ["en"] = "Auto Reconnect Min",
+                ["zhs"] = "自动重连(Min)",
             };
 
             var registerMethod = _apiType!.GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -102,20 +102,20 @@ internal static class ModConfigBridge
 
             if (registerMethod.GetParameters().Length == 4)
             {
-                registerMethod.Invoke(null, new object[] { "AutoReconnect", displayNames["en"], displayNames, entries });
+                registerMethod.Invoke(null, new object[] { "AutoReconnectMin", displayNames["en"], displayNames, entries });
             }
             else
             {
-                registerMethod.Invoke(null, new object[] { "AutoReconnect", displayNames["en"], entries });
+                registerMethod.Invoke(null, new object[] { "AutoReconnectMin", displayNames["en"], entries });
             }
 
             // 加载已保存的配置并应用到运行时
             ApplyPersisted();
-            Diag.Log("[AutoReconnect] 已向 ModConfig 注册配置页（设置 → Mods）。");
+            Diag.Log("[AutoReconnectMin] 已向 ModConfig 注册配置页（设置 → Mods）。");
         }
         catch (Exception e)
         {
-            Diag.Log($"[AutoReconnect] ModConfig 注册失败：{e}");
+            Diag.Log($"[AutoReconnectMin] ModConfig 注册失败：{e}");
         }
     }
 
@@ -129,7 +129,7 @@ internal static class ModConfigBridge
         {
             var result = _apiType!.GetMethod("GetValue", BindingFlags.Public | BindingFlags.Static)
                 ?.MakeGenericMethod(typeof(T))
-                ?.Invoke(null, new object[] { "AutoReconnect", key });
+                ?.Invoke(null, new object[] { "AutoReconnectMin", key });
             return result != null ? (T)result : fallback;
         }
         catch { return fallback; }
@@ -142,7 +142,7 @@ internal static class ModConfigBridge
         try
         {
             _apiType!.GetMethod("SetValue", BindingFlags.Public | BindingFlags.Static)
-                ?.Invoke(null, new object[] { "AutoReconnect", key, value });
+                ?.Invoke(null, new object[] { "AutoReconnectMin", key, value });
         }
         catch { }
     }

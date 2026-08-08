@@ -191,7 +191,7 @@ internal static class LocalPlayerDisconnectedPatch
             HostInfoTracker.IsReconnecting = true;
 
             var reconnectNode = new ReconnectRunner();
-            reconnectNode.Name = "AutoReconnect_Runner";
+            reconnectNode.Name = "AutoReconnectMin_Runner";
             // 断线瞬间 NetService 仍在，捕获主机 Steam ID 供 FromPlayer 重建连接。
             try
             {

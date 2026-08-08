@@ -7,8 +7,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-    <AssemblyName>AutoReconnect</AssemblyName>
-    <RootNamespace>AutoReconnect</RootNamespace>
+    <AssemblyName>AutoReconnectMin</AssemblyName>
+    <RootNamespace>AutoReconnectMin</RootNamespace>
 
     <Sts2Dir Condition="'$(STS2_GAME_DIR)' != ''">$(STS2_GAME_DIR)</Sts2Dir>
     <Sts2Dir Condition="'$(STS2_GAME_DIR)' == ''">D:\Steam\steamapps\common\Slay the Spire 2</Sts2Dir>

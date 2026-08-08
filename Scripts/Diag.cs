@@ -5,7 +5,7 @@ namespace AutoReconnect.Scripts;
 
 /// <summary>
 /// File-based diagnostic logger, self-initializing via ModuleInitializer.
-/// Logs to: %APPDATA%/SlayTheSpire2/mods/AutoReconnect/logs/autoreconnect.log
+/// Logs to: %APPDATA%/SlayTheSpire2/mods/AutoReconnectMin/logs/autoreconnectmin.log
 /// (matching the CDC convention)
 /// </summary>
 internal static class Diag
@@ -23,11 +23,11 @@ internal static class Diag
             // %APPDATA%/Roaming/SlayTheSpire2/mods/{ModName}/logs/{file}.log
             var baseDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "SlayTheSpire2", "mods", "AutoReconnect", "logs");
+                "SlayTheSpire2", "mods", "AutoReconnectMin", "logs");
 
             Directory.CreateDirectory(baseDir);
 
-            _logPath = Path.Combine(baseDir, "autoreconnect.log");
+            _logPath = Path.Combine(baseDir, "autoreconnectmin.log");
             Log("Diag init OK");
         }
         catch (Exception ex)
