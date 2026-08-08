@@ -35,7 +35,7 @@ public class Entry
         // 1. 诊断日志优先（补丁内部会用到）
         Diag.Init();
         Diag.Log("============================================");
-        Diag.Log("AutoReconnectMin v0.8.0-min (Checkpoint Rollback) Entry.Init() 开始");
+        Diag.Log("AutoReconnectMin v0.8.3-min (Checkpoint Rollback) Entry.Init() 开始");
         Diag.Log("============================================");
 
         // 2. 重置跟踪状态
@@ -94,6 +94,6 @@ public class Entry
         }
 
         Diag.Log($"离线接管：TakeoverEnabled={Ghost.OfflineTakeoverCore.TakeoverEnabled}（进入联机对局后自动激活）");
-        Diag.Log("AutoReconnectMin v0.8.0-min (Checkpoint Rollback) 初始化完成。");
+        Diag.Log("AutoReconnectMin v0.8.3-min (Checkpoint Rollback) 初始化完成。");
     }
 }

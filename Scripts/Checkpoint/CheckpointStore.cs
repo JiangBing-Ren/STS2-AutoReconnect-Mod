@@ -17,6 +17,17 @@ internal static class CheckpointStore
 
     public static SerializableRun? Latest => _checkpoints.Count > 0 ? _checkpoints[^1] : null;
 
+    /// <summary>返回全部检查点的只读副本（按写入顺序，索引 0 最早、末尾最新）。</summary>
+    public static IReadOnlyList<SerializableRun> GetAll()
+    {
+        SerializableRun[] snapshot;
+        lock (_checkpoints)
+        {
+            snapshot = _checkpoints.ToArray();
+        }
+        return snapshot;
+    }
+
     public static void Capture(SerializableRun run)
     {
         if (run == null) return;
