@@ -16,6 +16,16 @@ namespace AutoReconnect.Scripts;
 internal static class ReconnectService
 {
     /// <summary>
+    /// v0.7.2 —— 自动重连总开关。
+    /// true（默认）：断线后由 ReconnectRunner 在对局内自动重连（FromLobby/FromPlayer 重建 transport）。
+    /// false：断线时放行原版 LocalPlayerDisconnected 流程，退回主菜单，
+    ///   由 MenuRejoinFlow 走主机存档对局（原生读档：NGame.LoadRun + NMultiplayerLoadGameScreen）重建，
+    ///   而非带着可能已分歧的内存态继续。适用于“状态已分歧，想干净重连”的场景。
+    /// 由 ModConfig 的 "autoReconnectEnabled" 切换。
+    /// </summary>
+    public static bool AutoReconnectEnabled = true;
+
+    /// <summary>
     /// 把新建的 NetService 赋回 RunManager，让游戏用新连接继续跑。
     /// 通过反射兼容 NetService 是 property 还是 field（不同版本可能不同）。
     /// </summary>

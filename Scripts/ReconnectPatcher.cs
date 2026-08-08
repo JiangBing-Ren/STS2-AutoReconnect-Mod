@@ -178,6 +178,16 @@ internal static class LocalPlayerDisconnectedPatch
             }
 
             Diag.Log("Unexpected disconnect — starting reconnection flow");
+
+            // v0.7.2 —— 自动重连总开关。关闭时，放行原版 LocalPlayerDisconnected 流程，
+            // 退回主菜单，由 MenuRejoinFlow 走主机存档对局（原生读档）重建，而非对局内自动重连。
+            // 适用于“状态已分歧（如 StateDivergence），想干净重连”的场景。
+            if (!ReconnectService.AutoReconnectEnabled)
+            {
+                Diag.Log("[AutoReconnect] 自动重连已关闭，放行原版流程退回主菜单（MenuRejoin 语境）。");
+                return true; // 不阻断原版流程 → 玩家回到主菜单，可走 MenuRejoin 原生读档重连
+            }
+
             HostInfoTracker.IsReconnecting = true;
 
             var reconnectNode = new ReconnectRunner();

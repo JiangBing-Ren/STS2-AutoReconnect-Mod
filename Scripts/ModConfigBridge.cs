@@ -159,6 +159,7 @@ internal static class ModConfigBridge
             Ghost.ReconnectBlockedPopup.ShowOnBlocked = GetValue("showRejoinBlockedPopup", true);
             ReconnectDiagnostics.ShowClientPopup = GetValue("showClientResultPopup", true);
             ReconnectDiagnostics.ShowHostPopup = GetValue("showHostEventPopup", true);
+            ReconnectService.AutoReconnectEnabled = GetValue("autoReconnectEnabled", true);
         }
         catch (Exception ex)
         {
@@ -345,6 +346,30 @@ internal static class ModConfigBridge
             Set(cfg, "Descriptions", L("Host-only. Opens the Steam invite dialog so you can pull a disconnected player back into the current run (the in-lobby invite button disappears once the run starts).",
                 "仅房主可用。打开 Steam 邀请对话框，把掉线玩家重新邀请回本局（开局前的邀请按钮在对局开始后就消失了）。"));
             Set(cfg, "OnChanged", new Action<object>(_ => Ghost.InviteHelper.TryInvite()));
+        }));
+
+        // ─── 自动重连总开关 ───────────────────────────────────
+        list.Add(Entry(cfg =>
+        {
+            Set(cfg, "Type", EnumVal("Header"));
+            Set(cfg, "Label", "Auto-Reconnect");
+            Set(cfg, "Labels", L("Auto-Reconnect", "自动重连"));
+        }));
+
+        list.Add(Entry(cfg =>
+        {
+            Set(cfg, "Key", "autoReconnectEnabled");
+            Set(cfg, "Label", "Auto-reconnect on disconnect");
+            Set(cfg, "Labels", L("Auto-reconnect on disconnect", "断线自动重连"));
+            Set(cfg, "Type", EnumVal("Toggle"));
+            Set(cfg, "DefaultValue", (object)true);
+            Set(cfg, "Description", "When ON (default), a disconnect automatically reconnects inside the run. When OFF, the game returns to the main menu where you rejoin via the host's saved run (native load) instead — useful when your local state has diverged (e.g. StateDivergence).");
+            Set(cfg, "Descriptions", L("When ON (default), a disconnect automatically reconnects inside the run. When OFF, the game returns to the main menu where you rejoin via the host's saved run (native load) instead — useful when your local state has diverged (e.g. StateDivergence).",
+                "开启（默认）：断线后在对局内自动重连。关闭：断线直接退回主菜单，由你通过主机的存档对局（原生读档）重新加入——本地状态已分歧（如 StateDivergence）时特别有用。"));
+            Set(cfg, "OnChanged", new Action<object>(v =>
+            {
+                ReconnectService.AutoReconnectEnabled = Convert.ToBoolean(v);
+            }));
         }));
 
         var result = Array.CreateInstance(_entryType!, list.Count);
