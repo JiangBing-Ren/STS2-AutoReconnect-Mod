@@ -47,27 +47,53 @@ internal static class CheckpointRollbackPopup
         }
     }
 
+    /// <summary>
+    /// NErrorPopup._verticalPopup 子节点（实际承载按钮的 NVerticalPopup）是在 _Ready() 里
+    /// GetNode 赋值的，而 _Ready 在节点入树后才跑。掉线回调语境下主循环正忙于拆场景，
+    /// 仅等 1 帧常不够——这里改为“轮询等待 _verticalPopup 就绪”（最多 ~1.5s），
+    /// 就绪后再挂按钮，避免“未找到 NVerticalPopup”而跳过按钮。
+    /// </summary>
     private static void ScheduleButtons(NErrorPopup popup)
-    {
-        var tree = Engine.GetMainLoop() as SceneTree;
-        if (tree == null)
-        {
-            AddButtons(popup);
-            return;
-        }
-        // 延迟一帧，确保弹窗已进入场景树、_Ready 完成、按钮可安全配置。
-        void OnFrame()
-        {
-            tree.ProcessFrame -= OnFrame;
-            AddButtons(popup);
-        }
-        tree.ProcessFrame += OnFrame;
-    }
-
-    private static void AddButtons(NErrorPopup popup)
     {
         try
         {
+            var tree = Engine.GetMainLoop() as SceneTree;
+            if (tree == null || popup == null)
+            {
+                AddButtons(popup);
+                return;
+            }
+            int tries = 0;
+            const int MaxTries = 90; // ~1.5s @60fps
+            void OnFrame()
+            {
+                if (popup == null || !GodotObject.IsInstanceValid(popup) || tries >= MaxTries)
+                {
+                    tree.ProcessFrame -= OnFrame;
+                    AddButtons(popup);
+                    return;
+                }
+                if (GetVerticalPopup(popup) != null)
+                {
+                    tree.ProcessFrame -= OnFrame;
+                    AddButtons(popup);
+                    return;
+                }
+                tries++;
+            }
+            tree.ProcessFrame += OnFrame;
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[Checkpoint] 安排掉线弹窗按钮失败：{ex}");
+        }
+    }
+
+    private static void AddButtons(NErrorPopup? popup)
+    {
+        try
+        {
+            if (popup == null) return;
             var vp = GetVerticalPopup(popup);
             if (vp == null)
             {
@@ -131,8 +157,9 @@ internal static class CheckpointRollbackPopup
         }
     }
 
-    private static object? GetVerticalPopup(NErrorPopup popup)
+    private static object? GetVerticalPopup(NErrorPopup? popup)
     {
+        if (popup == null) return null;
         var f = popup.GetType().GetField("_verticalPopup",
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         return f?.GetValue(popup);
