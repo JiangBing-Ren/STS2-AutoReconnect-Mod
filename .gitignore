@@ -1,0 +1,18 @@
+# ─── 构建产物 ───
+bin/
+obj/
+.godot/
+*.csproj.user
+
+# 根目录构建输出（csproj 会把 DLL 拷到这里）；部署用副本保留在 deploy/
+/AutoReconnect.dll
+
+# ─── 工具/编辑器状态 ───
+.workbuddy/
+.vs/
+.idea/
+*.user
+
+# ─── OS ───
+.DS_Store
+Thumbs.db

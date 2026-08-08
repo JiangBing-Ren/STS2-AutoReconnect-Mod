@@ -1,0 +1,12 @@
+{
+  "id": "AutoReconnect",
+  "name": "Auto Reconnect",
+  "author": "liwenhao0427",
+  "description": "断线自动重连——掉线后自动重新加入对局；主机端自动托管掉线玩家，长断线也不会卡住对局。重连被战斗拦截时弹出“等本场战斗结束后再重连”提示（带“重试”按钮）。配置界面提供“邀请掉线玩家”按钮，房主可在对局进行中通过 Steam 邀请对话框把掉线玩家拉回房间。可选接入 ModConfig 设置界面。无需安装其它 mod。",
+  "version": "0.7.1",
+  "has_pck": false,
+  "has_dll": true,
+  "dependencies": [],
+  "affects_gameplay": false,
+  "min_game_version": "0.110.0"
+}
