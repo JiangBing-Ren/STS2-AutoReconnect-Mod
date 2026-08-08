@@ -148,7 +148,44 @@ internal static class MenuRejoinFlow
 
             var runState = RunState.FromSerializable(run);
             await RunManager.Instance.SetUpSavedMultiplayer(runState, lobby);
-            await game.LoadRun(runState, run.PreFinishedRoom);
+
+            // v0.7.1 修复：重连客机加载当前房间时，其他玩家早已完成 CombatStateSynchronizer 握手。
+            // 若不禁用，客机会永远等待不会重发的 SyncPlayerDataMessage / SyncRngMessage，导致黑屏。
+            // 临时禁用本次房间入口的同步，LoadRun 完成后再恢复；SerializableRun 已带回主机当前状态。
+            CombatStateSynchronizer? combatSync = null;
+            try
+            {
+                combatSync = RunManager.Instance.CombatStateSynchronizer;
+                if (combatSync != null)
+                {
+                    combatSync.IsDisabled = true;
+                    Diag.Log("[MenuRejoin] 已临时禁用 CombatStateSynchronizer，避免重连客机等待过期握手。");
+                }
+            }
+            catch (Exception ex)
+            {
+                Diag.Log($"[MenuRejoin] 禁用 CombatStateSynchronizer 失败：{ex.Message}");
+            }
+
+            try
+            {
+                await game.LoadRun(runState, run.PreFinishedRoom);
+            }
+            finally
+            {
+                try
+                {
+                    if (combatSync != null)
+                    {
+                        combatSync.IsDisabled = false;
+                        Diag.Log("[MenuRejoin] 已恢复 CombatStateSynchronizer。");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Diag.Log($"[MenuRejoin] 恢复 CombatStateSynchronizer 失败：{ex.Message}");
+                }
+            }
 
             // disconnectSession: false —— 只注销 lobby 的消息处理器，
             // 连接本身要留给已经接管的 RunManager 继续用。
