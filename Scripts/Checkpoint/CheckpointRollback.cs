@@ -80,7 +80,7 @@ internal static class CheckpointRollback
         if (cp == null)
         {
             Diag.Log("[Checkpoint] 无可用检查点，放弃回退。");
-            ShowInfo("无法回退", "当前尚无可用检查点，无法回退。可先邀请队友重连，或继续游戏触发节点保存后再试。");
+            Notify("无法回退", "当前尚无可用检查点，无法回退。可先邀请队友重连，或继续游戏触发节点保存后再试。");
             return;
         }
         RollbackTo(cp);
@@ -123,7 +123,11 @@ internal static class CheckpointRollback
         // 回退开始即清空“已通知”集合：新的一局会重新触发提示逻辑。
         ClearAllNotified();
 
-        if (RunManager.Instance is not { NetService: { Type: NetGameType.Host } })
+        var rm = RunManager.Instance;
+        // 放宽：单人/离线（NetService == null）或主机（Type == Host）均可回退；
+        // 客机（Type == Client）不能重新托管整局，拒绝。
+        bool canRollback = rm != null && (rm.NetService == null || rm.NetService.Type == NetGameType.Host);
+        if (!canRollback)
         {
             Diag.Log("[Checkpoint] 非主机或不在对局中，放弃回退。");
             return;
@@ -223,8 +227,8 @@ internal static class CheckpointRollback
         }
     }
 
-    /// <summary>通用信息弹窗（复用原版 NErrorPopup 样式）。</summary>
-    private static void ShowInfo(string title, string body)
+    /// <summary>通用信息弹窗（复用原版 NErrorPopup 样式）。供 HUD/弹窗统一调用。</summary>
+    public static void Notify(string title, string body)
     {
         try
         {

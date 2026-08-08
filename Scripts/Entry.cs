@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Reflection;
+using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
 
@@ -35,7 +36,7 @@ public class Entry
         // 1. 诊断日志优先（补丁内部会用到）
         Diag.Init();
         Diag.Log("============================================");
-        Diag.Log("AutoReconnectMin v0.8.3-min (Checkpoint Rollback) Entry.Init() 开始");
+        Diag.Log("AutoReconnectMin v0.8.4-min (Checkpoint Rollback) Entry.Init() 开始");
         Diag.Log("============================================");
 
         // 2. 重置跟踪状态
@@ -94,6 +95,31 @@ public class Entry
         }
 
         Diag.Log($"离线接管：TakeoverEnabled={Ghost.OfflineTakeoverCore.TakeoverEnabled}（进入联机对局后自动激活）");
-        Diag.Log("AutoReconnectMin v0.8.3-min (Checkpoint Rollback) 初始化完成。");
+
+        // 4. 挂载对局中常态化检查点浮层（参考 QuickLink：常驻 tree.Root，对局中始终可见）
+        try
+        {
+            var tree = Engine.GetMainLoop() as SceneTree;
+            if (tree?.Root != null)
+            {
+                tree.Root.CallDeferred(Node.MethodName.AddChild, (GodotObject)new Checkpoint.CheckpointHud());
+                Diag.Log("CheckpointHud 已请求挂载到 tree.Root");
+            }
+            else
+            {
+                Diag.Log("CheckpointHud: tree.Root 暂未就绪，延迟一帧挂载");
+                Callable.From(() =>
+                {
+                    var t2 = Engine.GetMainLoop() as SceneTree;
+                    t2?.Root?.CallDeferred(Node.MethodName.AddChild, (GodotObject)new Checkpoint.CheckpointHud());
+                }).CallDeferred();
+            }
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"CheckpointHud 挂载异常（已忽略）：{ex}");
+        }
+
+        Diag.Log("AutoReconnectMin v0.8.4-min (Checkpoint Rollback) 初始化完成。");
     }
 }
