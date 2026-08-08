@@ -160,6 +160,7 @@ internal static class ModConfigBridge
             ReconnectDiagnostics.ShowClientPopup = GetValue("showClientResultPopup", true);
             ReconnectDiagnostics.ShowHostPopup = GetValue("showHostEventPopup", true);
             ReconnectService.AutoReconnectEnabled = GetValue("autoReconnectEnabled", true);
+            Checkpoint.CheckpointRollback.Enabled = GetValue("checkpointRollbackEnabled", true);
         }
         catch (Exception ex)
         {
@@ -369,6 +370,22 @@ internal static class ModConfigBridge
             Set(cfg, "OnChanged", new Action<object>(v =>
             {
                 ReconnectService.AutoReconnectEnabled = Convert.ToBoolean(v);
+            }));
+        }));
+
+        list.Add(Entry(cfg =>
+        {
+            Set(cfg, "Key", "checkpointRollbackEnabled");
+            Set(cfg, "Label", "Roll back to checkpoint on disconnect (Min)");
+            Set(cfg, "Labels", L("Roll back to checkpoint on disconnect (Min)", "断线全队回退检查点（Min 版）"));
+            Set(cfg, "Type", EnumVal("Toggle"));
+            Set(cfg, "DefaultValue", (object)true);
+            Set(cfg, "Description", "Min build: when a teammate drops, the whole party rewinds to the last clean checkpoint (everyone returns to lobby and reloads the same run). Solves reconnect divergence at the cost of redoing the current node. Off = fall back to individual reconnect.");
+            Set(cfg, "Descriptions", L("Min build: when a teammate drops, the whole party rewinds to the last clean checkpoint (everyone returns to lobby and reloads the same run). Solves reconnect divergence at the cost of redoing the current node. Off = fall back to individual reconnect.",
+                "Min 版：队友掉线时，全队回退到最近干净检查点（所有人返回大厅并加载同一份对局）。彻底解决重连分歧，代价是重打当前节点。关闭则退回单人重连。"));
+            Set(cfg, "OnChanged", new Action<object>(v =>
+            {
+                Checkpoint.CheckpointRollback.Enabled = Convert.ToBoolean(v);
             }));
         }));
 
