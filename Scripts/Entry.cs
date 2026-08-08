@@ -35,7 +35,7 @@ public class Entry
         // 1. 诊断日志优先（补丁内部会用到）
         Diag.Init();
         Diag.Log("============================================");
-        Diag.Log("AutoReconnect v0.7.2 Entry.Init() 开始");
+        Diag.Log("AutoReconnect v0.7.3 Entry.Init() 开始");
         Diag.Log("============================================");
 
         // 2. 重置跟踪状态
@@ -94,6 +94,6 @@ public class Entry
         }
 
         Diag.Log($"离线接管：TakeoverEnabled={Ghost.OfflineTakeoverCore.TakeoverEnabled}（进入联机对局后自动激活）");
-        Diag.Log("AutoReconnect v0.7.2 初始化完成。");
+        Diag.Log("AutoReconnect v0.7.3 初始化完成。");
     }
 }
