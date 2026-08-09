@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json;
+using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Saves;
 
 namespace AutoReconnect.Scripts.Checkpoint;
@@ -80,16 +81,71 @@ internal static class CheckpointStore
     }
 
     /// <summary>
-    /// 从 SerializableRun 提取可读描述：第几幕 · 第几层 · 几名玩家。
-    /// 仅使用稳定字段，避免反射；楼层用 FloorReached（历史路径总层数）。
+    /// 从 SerializableRun 提取可读描述（两行）：
+    ///   第1行：节点类型 · 地图坐标（col,row）
+    ///   第2行：第X幕 · 第Y层 · N人 · 金币G · 卡C
+    /// 仅使用稳定字段，避免反射。楼层用 FloorReached（历史路径总层数）。
     /// </summary>
     private static string Describe(SerializableRun run)
     {
-        int act = (run.CurrentActIndex + 1);
+        int act = run.CurrentActIndex + 1;
         int floor = run.FloorReached;
         int players = run.Players?.Count ?? 0;
-        return $"第{act}幕 · 第{floor}层 · {players}名玩家";
+
+        // 节点类型（当前所在地图点 = 当前幕历史最后一个条目）
+        string node = "未知节点";
+        try
+        {
+            var history = run.MapPointHistory;
+            if (history != null && run.CurrentActIndex >= 0 && run.CurrentActIndex < history.Count)
+            {
+                var actHistory = history[run.CurrentActIndex];
+                if (actHistory is { Count: > 0 })
+                    node = NodeTypeName(actHistory[^1].MapPointType);
+            }
+        }
+        catch { /* 忽略，使用默认 */ }
+
+        // 地图坐标（已访问坐标列表最后一个）
+        string coord = "";
+        try
+        {
+            if (run.VisitedMapCoords is { Count: > 0 } coords)
+            {
+                var c = coords[^1];
+                coord = $"坐标({c.col},{c.row})";
+            }
+        }
+        catch { /* 忽略 */ }
+
+        // 金币 / 卡牌数（取首个玩家作代表，字段缺失则忽略）
+        string extra = "";
+        try
+        {
+            if (run.Players is { Count: > 0 } ps && ps[0] != null)
+            {
+                int gold = ps[0].Gold;
+                int cards = ps[0].Deck?.Count ?? 0;
+                extra = $" · 金币{gold} · 卡{cards}";
+            }
+        }
+        catch { /* 忽略 */ }
+
+        string line1 = string.IsNullOrEmpty(coord) ? node : $"{node} · {coord}";
+        return $"{line1}\n第{act}幕·第{floor}层 · {players}人{extra}";
     }
+
+    private static string NodeTypeName(MapPointType t) => t switch
+    {
+        MapPointType.Monster => "战斗",
+        MapPointType.Elite => "精英",
+        MapPointType.RestSite => "休息",
+        MapPointType.Shop => "商店",
+        MapPointType.Treasure => "宝藏",
+        MapPointType.Boss => "BOSS",
+        MapPointType.Ancient => "远古",
+        _ => "未知节点"
+    };
 
     /// <summary>
     /// 深拷贝：用游戏自己的序列化器（JsonSerializationUtility.GetTypeInfo）做 JSON 往返，

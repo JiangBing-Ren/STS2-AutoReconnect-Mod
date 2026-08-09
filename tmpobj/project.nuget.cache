@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "dgSpecHash": "u2asY01NxF8=",
+  "success": true,
+  "projectFilePath": "D:\\1Mods\\杀戮尖塔2\\修改mod\\STS2_AutoReconnect\\AutoReconnect.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\hanf2\\.nuget\\packages\\godot.sourcegenerators\\4.5.1\\godot.sourcegenerators.4.5.1.nupkg.sha512",
+    "C:\\Users\\hanf2\\.nuget\\packages\\godotsharp\\4.5.1\\godotsharp.4.5.1.nupkg.sha512",
+    "C:\\Users\\hanf2\\.nuget\\packages\\microsoft.netcore.app.ref\\9.0.14\\microsoft.netcore.app.ref.9.0.14.nupkg.sha512",
+    "C:\\Users\\hanf2\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\9.0.14\\microsoft.windowsdesktop.app.ref.9.0.14.nupkg.sha512",
+    "C:\\Users\\hanf2\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\9.0.14\\microsoft.aspnetcore.app.ref.9.0.14.nupkg.sha512"
+  ],
+  "logs": []
+}

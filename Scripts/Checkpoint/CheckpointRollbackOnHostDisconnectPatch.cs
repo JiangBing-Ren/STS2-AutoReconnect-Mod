@@ -13,7 +13,7 @@ namespace AutoReconnect.Scripts.Checkpoint;
 /// Min 版本核心行为：主机检测到客机掉线时，弹出“邀请 / 回退”提示，【不再】自动回退。
 /// 挂在 RunLobby.OnDisconnectedFromClientAsHost（主机侧、客机传输层超时约 14s 后触发）。
 /// 与 OfflineTakeover 的 Ghost 托管是两条不同路径：本补丁只负责“通知 + 给主机选项”，
-/// 真正回退由主机在弹窗里点“回退到检查点”触发（CheckpointRollback.RollbackToLatest），
+/// 真正回退由主机在弹窗里点“回退到检查点”触发（CheckpointRollback.RollbackTo），
 /// 从根本上消除“重连落点带入进行中房间”导致的 StateDivergence。
 ///
 /// 同一掉线玩家只弹一次提示（按 Steam ID 去重）；队友通过邀请重连成功后清除去重标记，

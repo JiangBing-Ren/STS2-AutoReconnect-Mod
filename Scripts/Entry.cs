@@ -36,7 +36,7 @@ public class Entry
         // 1. 诊断日志优先（补丁内部会用到）
         Diag.Init();
         Diag.Log("============================================");
-        Diag.Log("AutoReconnectMin v0.8.4-min (Checkpoint Rollback) Entry.Init() 开始");
+        Diag.Log("AutoReconnectMin v0.8.10-min (Checkpoint Rollback) Entry.Init() 开始");
         Diag.Log("============================================");
 
         // 2. 重置跟踪状态
@@ -120,6 +120,6 @@ public class Entry
             Diag.Log($"CheckpointHud 挂载异常（已忽略）：{ex}");
         }
 
-        Diag.Log("AutoReconnectMin v0.8.4-min (Checkpoint Rollback) 初始化完成。");
+        Diag.Log("AutoReconnectMin v0.8.10-min (Checkpoint Rollback) 初始化完成。");
     }
 }
