@@ -63,6 +63,17 @@ tail -F /path/to/game.log > reconnect_run1.log
    - Expectation: if reconnect is impossible during combat, logs should show `CheckingSession` or clear rejection reason.
    - 日志检查：`sessionState != Running`、`CheckingSession`
 
+6. 主机触发「原地保活重载」后全员自动重连回同一大厅（v0.9.0-min 根治）
+   - 前置：已开启 `checkpointRollbackEnabled`，且对局中已产生过检查点（≥1 次节点存档）。
+   - 操作：客机硬掉线 → 主机等 ≥15s 收到「邀请/回退」提示 → 主机在浮层点一个检查点。
+   - Expectation（核心根治效果）：
+     - 主机日志出现 `主机回退完成：已原地载入检查点，Steam 大厅保持不变，等待客机自动重连。`；
+     - 主机与客机日志都应出现 `已拦截 NetService.Disconnect` / `CleanUp 完成且连接保活`（连接保活的关键标志）；
+     - 掉线客机与被 StateDivergence 请离的在线队友都**自动重连回同一 Steam 大厅**，无需新邀请；
+     - 三人最终处于同一份检查点，继续推进**不出现** `Abandoning run` 或状态分歧弹窗。
+   - 日志检查：`主机检测到玩家` + `弹出邀请/回退提示`、`主机回退完成：已原地载入检查点`、`已拦截 NetService.Disconnect`、`已请客机` + `重连（回退需要整局重载）`、`HandleRejoinResponse`
+   - 回归对照：v0.8.x 的旧行为是“全员回主菜单 + 主机新托管换大厅”，会导致掉线客机连旧大厅失败弹「发现未知错误」。本用例验证该问题已根除。
+
 ### 收集上传内容 / What to Upload
 - `reconnect_run1_host.log`（问题时段前后各 30s）
 - `reconnect_run1_client.log`（同上）

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Reflection;
 using Godot;
+using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Runs;
@@ -17,20 +19,22 @@ namespace AutoReconnect.Scripts.Checkpoint;
 ///   - CanvasLayer（Layer=130，ProcessMode=Always）常驻挂在 tree.Root，对局中始终可见。
 ///   - 右下角可拖拽浮动按钮（FAB）：悬停/按下变色 + AnimIn/Out 风格动画；点击展开/收起列表面板。
 ///   - 检查点列表面板（Panel + ScrollContainer + VBoxContainer）：每个检查点一行按钮，
-///     显示“检查点 #seq ·（当前位置）”、节点类型·坐标、第X幕·第Y层·N人·金币·卡牌数。
-///     最新（=当前所在）检查点灰显禁用，避免“回退到当前点”的无意义操作。
+///     显示“检查点 #seq ·（最近检查点）”、节点类型·坐标、第X幕·第Y层·N人·金币·卡牌数。
+///     最新（=最近检查点）灰显禁用，避免“回退到当前点”的无意义操作。
+///     另：FAB 左侧常驻一个“当前：<节点>·第X幕·第Y层”实时标签，从运行时 RunState 读取，
+///     反映玩家真实所在（检查点快照只在节点完成时保存，天然比实时位置慢一步，故两者分开展示）。
 ///   - 回退二次确认框：点击非当前检查点后弹出，确认才执行（防误触，多人回退代价大）。
 ///   - 回退过渡遮罩（参考 QuickLinkTransitionOverlay）：黑底淡入 + “正在回退…”文字，
 ///     场景切换完成后淡出，避免回退过程中的闪屏。
 ///
-/// 交互细节（v0.8.10-min）：
+/// 交互细节（v0.9.1-min）：
 ///   - 浮动按钮：左键点击展开/收起列表面板；右键按住拖动按钮位置。
 ///   - 点击面板/确认框以外的区域自动收起列表。
 ///   - 快捷键 F5 开关列表面板。
 ///   - 面板打开时若捕获到新检查点，列表实时刷新（当前位置标记自动前移）。
 ///
-/// 仅在“对局中”（RunManager.Instance.NetService != null）显示 FAB。回退由主机/单人执行；
-/// 客机点击会提示“仅房主可回退”（与 CheckpointRollback 的 host 判断一致）。
+/// 仅在“对局中且本机可回退”显示 FAB（主机或单人）。检查点由主机权威捕获、回退只能由
+/// 主机/单人触发；纯客机既不捕获也不回退，故 FAB 不在客机显示（避免永远“暂无节点”且误导）。
 /// </summary>
 internal partial class CheckpointHud : CanvasLayer
 {
@@ -71,6 +75,7 @@ internal partial class CheckpointHud : CanvasLayer
     private Vector2 _dragOffset;
     private Vector2 _fabHome;
     private SerializableRun? _pendingCheckpoint;
+    private Label _livePosLabel = null!; // 实时当前位置（常驻，FAB 左侧，从运行时 RunState 读取，不滞后）
 
     public override void _Ready()
     {
@@ -104,6 +109,15 @@ internal partial class CheckpointHud : CanvasLayer
         _fab.MouseEntered += () => AnimateFabColor(ColorHover);
         _fab.MouseExited += () => { if (!_dragging) AnimateFabColor(_expanded ? ColorHover : ColorNormal); };
         _root.AddChild(_fab);
+
+        // ---- 实时当前位置标签（常驻，显示在 FAB 左侧；读运行时 RunState，不滞后）----
+        _livePosLabel = new Label();
+        _livePosLabel.AddThemeFontSizeOverride("font_size", 14);
+        _livePosLabel.AddThemeColorOverride("font_color", new Color(0.78f, 0.96f, 0.82f, 1f));
+        _livePosLabel.MouseFilter = Control.MouseFilterEnum.Ignore;
+        _livePosLabel.HorizontalAlignment = HorizontalAlignment.Right;
+        _livePosLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+        _root.AddChild(_livePosLabel);
 
         // ---- 列表面板 ----
         _panel = new PanelContainer();
@@ -256,8 +270,11 @@ internal partial class CheckpointHud : CanvasLayer
         // “在对局中”用 IsInProgress（= State != null）判断，而非 NetService != null——
         // 主界面 / 好友大厅等场景 NetService 已就绪但 State 为 null，应隐藏浮层。
         bool inRun = RunManager.Instance?.IsInProgress ?? false;
-        bool showUi = inRun && !CheckpointRollback.IsRollingBack;
-        // FAB 仅在对局中（且非回退中）可见
+        // 仅主机 / 单人 显示浮层：检查点由主机权威捕获（客机不调用 SaveRun，永远空），
+        // 且回退只能由主机/单人触发；在纯客机显示只会一直“暂无节点”并误导“仅房主可回退”。
+        bool allowed = IsRollbackAllowed();
+        bool showUi = inRun && !CheckpointRollback.IsRollingBack && allowed;
+        // FAB 仅在对局中（且非回退中、且本机可回退）可见
         _fab.Visible = showUi;
         if (_expanded) _panel.Visible = showUi;
         // 回退遮罩统一由 CheckpointRollback.IsRollingBack 驱动（HUD 面板与掉线弹窗两条路径都经 RollbackTo），
@@ -266,7 +283,7 @@ internal partial class CheckpointHud : CanvasLayer
         // 点击外部捕获层：仅列表展开且未回退/未确认时启用
         _outside.Visible = _expanded && !CheckpointRollback.IsRollingBack && !_confirming;
 
-        if (!inRun && !CheckpointRollback.IsRollingBack)
+        if ((!inRun || !allowed) && !CheckpointRollback.IsRollingBack)
         {
             _expanded = false;
             _panel.Visible = false;
@@ -277,6 +294,7 @@ internal partial class CheckpointHud : CanvasLayer
         if (inRun)
         {
             UpdateFabLabel();
+            UpdateLivePosLabel();
             // 实时刷新：打开状态下若检查点数量变化（捕获了新检查点），重建列表
             if (_expanded && !CheckpointRollback.IsRollingBack && !_confirming)
             {
@@ -298,7 +316,8 @@ internal partial class CheckpointHud : CanvasLayer
         // 快捷键 F5：对局中开关列表面板（确认/回退中不响应）
         if (e is InputEventKey k && k.Pressed && !k.Echo && k.Keycode == Key.F5)
         {
-            if (RunManager.Instance?.NetService != null && !CheckpointRollback.IsRollingBack && !_confirming)
+            // 仅本机可回退（主机/单人）才响应 F5；纯客机不显示浮层，F5 也不应展开。
+            if (IsRollbackAllowed() && RunManager.Instance?.NetService != null && !CheckpointRollback.IsRollingBack && !_confirming)
             {
                 if (_expanded) CollapsePanel();
                 else ExpandPanel();
@@ -310,6 +329,60 @@ internal partial class CheckpointHud : CanvasLayer
     {
         int n = CheckpointStore.GetEntries().Count;
         _fab.Text = n > 0 ? $"检查点 ({n})" : "检查点";
+    }
+
+    // ---------- 实时当前位置（从运行时 RunState 读取，不滞后）----------
+
+    private void UpdateLivePosLabel()
+    {
+        string txt = GetLivePosition();
+        bool show = !string.IsNullOrEmpty(txt) && !CheckpointRollback.IsRollingBack;
+        _livePosLabel.Visible = show;
+        if (!show) return;
+        _livePosLabel.Text = txt;
+        // 跟随 FAB：放在其左侧，垂直居中对齐（拖拽/默认位置都同步）
+        float lw = _livePosLabel.Size.X;
+        float lh = _livePosLabel.Size.Y;
+        _livePosLabel.Position = new Vector2(_fab.Position.X - lw - 10f, _fab.Position.Y + (FabHeight - lh) / 2f);
+    }
+
+    /// <summary>读取玩家实时位置（节点类型 + 幕 + 楼层）。数据源是运行时 RunState（非检查点快照），因此不滞后。
+    /// 节点类别用 state.CurrentMapPoint.PointType（由 CurrentMapCoord 反查地图生成类型，权威、不滞后）；
+    /// 楼层用 CurrentMapCoord.row + 1（游戏标准算法），不用 TotalFloor（历史条目累计数）。</summary>
+    private string GetLivePosition()
+    {
+        try
+        {
+            var rm = RunManager.Instance;
+            if (rm == null) return "";
+            var state = GetRunState(rm);
+            if (state == null) return "";
+            int act = state.CurrentActIndex + 1;
+            int floor = state.CurrentMapCoord?.row + 1 ?? state.TotalFloor;
+            string node = "未知节点";
+            if (state.CurrentMapPoint != null)
+                node = CheckpointStore.DisplayNodeType(state.CurrentMapPoint.PointType);
+            return $"当前：{node} · 第{act}幕·第{floor}层";
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[CheckpointHud] 读取实时位置失败（忽略）：{ex.Message}");
+            return "";
+        }
+    }
+
+    /// <summary>RunManager.State 是 private RunState?，反射取出（与基游戏解耦，失败返回 null 不阻断 UI）。</summary>
+    private static RunState? GetRunState(RunManager rm)
+    {
+        try
+        {
+            var prop = typeof(RunManager).GetProperty("State", BindingFlags.NonPublic | BindingFlags.Instance);
+            return prop?.GetValue(rm) as RunState;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // ---------- 按钮样式 / 动画（参考 QuickLink 的 AnimIn/Out、悬停变色）----------
@@ -414,7 +487,7 @@ internal partial class CheckpointHud : CanvasLayer
 
         var entries = CheckpointStore.GetEntries();
         _lastCount = entries.Count;
-        // 最新检查点（seq 最大、i == Count-1）即“当前所在”，灰显禁用。
+        // 最新检查点（seq 最大、i == Count-1）即“最近检查点”，灰显禁用（并非玩家实时位置）。
         for (int i = entries.Count - 1; i >= 0; i--)
         {
             var (run, label, seq) = entries[i];
@@ -447,7 +520,7 @@ internal partial class CheckpointHud : CanvasLayer
         btn.MouseFilter = Control.MouseFilterEnum.Stop;
         btn.FocusMode = Control.FocusModeEnum.None;
 
-        string title = isCurrent ? $"检查点 #{seq}  ·  当前位置" : $"检查点 #{seq}";
+        string title = isCurrent ? $"检查点 #{seq}  ·  最近检查点" : $"检查点 #{seq}";
         var text = new Label();
         text.Text = $"{title}\n{label}";
         text.HorizontalAlignment = HorizontalAlignment.Center;
@@ -464,7 +537,7 @@ internal partial class CheckpointHud : CanvasLayer
 
         if (isCurrent)
         {
-            // 当前位置：灰显，禁用回退
+            // 最近检查点：灰显，禁用回退（它是最新保存的回退目标，并非玩家实时位置；实时位置见 FAB 左侧标签）
             nb.BgColor = new Color(0.20f, 0.22f, 0.24f, 0.92f);
             nb.BorderColor = new Color(0.5f, 0.55f, 0.6f, 1f);
             text.AddThemeColorOverride("font_color", new Color(0.7f, 0.75f, 0.8f, 1f));
@@ -563,8 +636,9 @@ internal partial class CheckpointHud : CanvasLayer
     private void UpdateRollbackMask()
     {
         // 单一真相：CheckpointRollback.IsRollingBack（HUD 面板触发与掉线弹窗触发都经 RollbackTo 设置）。
-        // 单人/离线回退不显示手画遮罩（DoRollback 内部用原生 NGame.Transition 遮罩，避免双重黑屏）。
-        bool wantMask = CheckpointRollback.IsRollingBack && !CheckpointRollback.IsRollingBackSingleplayer;
+        // 走原生 Transition 遮罩的回退（单人/离线、以及 v0.9.0 多人主机原地保活重载）不显示手画遮罩，
+        // 避免与原生淡入淡出形成双重黑屏。
+        bool wantMask = CheckpointRollback.IsRollingBack && !CheckpointRollback.IsRollingBackNativeTransition;
         if (wantMask == _maskShown) return;
         _maskShown = wantMask;
         _mask.Visible = true;

@@ -3,7 +3,7 @@
   "name": "Auto Reconnect Min",
   "author": "liwenhao0427",
   "description": "【Min 版】断线全队回退检查点——队友掉线时，主机原地把全队拽回最近一个干净节点重打，Steam 大厅保持不变，掉线的人自动重连回来即可，从根本上消除重连分歧（战斗内 / ? 节点 / 事件内）。代价是重打当前节点。可选接入 ModConfig 设置界面（checkpointRollbackEnabled 开关）。无需安装其它 mod。",
-  "version": "0.9.5-min",
+  "version": "0.9.2-min",
   "has_pck": false,
   "has_dll": true,
   "dependencies": [],

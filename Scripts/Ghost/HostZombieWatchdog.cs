@@ -190,6 +190,13 @@ internal static class HostZombieWatchdog
     private static void Tick()
     {
         if (!OfflineTakeoverCore.IsTakeoverActive) return;
+
+        // v0.9.0 —— 回退期间一律停手。
+        // 主机原地重载会先把在线客机踢下线、再重建 run，这段时间客机正在陆续重连回来；
+        // 看门狗此刻若照常判定"僵尸"，会把刚连上、还没来得及握手的客机再踢一次，
+        // 形成"踢→连→再踢"的死循环（v0.7.0 的 1016 就是同类误伤）。
+        if (Checkpoint.CheckpointRollback.IsRollingBack) return;
+
         var rm = RunManager.Instance;
         if (rm is not { NetService: NetHostGameService host }) return;
 

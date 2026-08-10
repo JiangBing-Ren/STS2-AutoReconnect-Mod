@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Multiplayer.Connection;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Messages.Lobby;
 using MegaCrit.Sts2.Core.Runs;
+using AutoReconnect.Scripts.MenuRejoin;
 
 namespace AutoReconnect.Scripts;
 
@@ -202,8 +203,43 @@ public partial class ReconnectRunner : Node
             }
             Diag.Log("PerformReconnect: rejoin response received");
 
-            // 6. 赋回 RunManager.NetService
+            // 6. 决定用哪条恢复路径。
+            //    v0.9.0 新增：主机可能在我们掉线期间执行了**检查点回退**，run 被换成了更早的快照。
+            //    这种情况下沿用「只换 NetService」的快路径 = 带着过期状态继续跑 → 必然 StateDivergence。
+            //    判据用基游戏自带的 NumReloads：主机每次 SetUpSaved* 都会 +1，普通抖动重连则两边一致。
             stage = ReconnectStage.RestoringRun;
+            int localReloads = MenuRejoinFlow.GetLocalNumReloads();
+            int hostReloads = rejoin.Value.serializableRun?.NumReloads ?? -1;
+            bool hostStateChanged = localReloads >= 0 && hostReloads >= 0 && hostReloads != localReloads;
+
+            Diag.Log($"PerformReconnect: NumReloads 本地={localReloads} 主机={hostReloads} → " +
+                     (hostStateChanged ? "主机状态已变，走整局重建" : "状态一致，走快路径（只换连接）"));
+
+            if (hostStateChanged)
+            {
+                try
+                {
+                    // 整局重建期间不能再让 _Process 驱动 _netService：
+                    // EnterRunFromRejoin 会自己挂 NetUpdatePump，LoadRun 之后由 NRun/RunManager 接手，
+                    // 双重 Update 会重复派发消息。同时摘掉本 Runner 的处理器——本节点马上就要 QueueFree，
+                    // 留着回调会在节点释放后被触发，指向已析构的 Godot 对象。
+                    var svc = _netService;
+                    _netService = null;
+                    DetachHandlers(svc!);
+                    await MenuRejoinFlow.RebuildRunInPlace(svc!, rejoin.Value);
+                    Diag.Log("PerformReconnect: 整局重建完成（已同步到主机当前存档），reconnect SUCCESS");
+                    return null;
+                }
+                catch (Exception rebuildEx)
+                {
+                    Diag.Log($"PerformReconnect: 整局重建失败 - {rebuildEx.GetType().Name}: {rebuildEx.Message}");
+                    CleanupNetService();
+                    return new ReconnectFailure(stage,
+                        $"主机已回退到更早的检查点，按新存档重建对局时失败：{rebuildEx.Message}");
+                }
+            }
+
+            // 快路径：状态一致，只把新连接接回 RunManager 即可。
             if (!ReconnectService.AssignNetServiceToRunManager(_netService))
             {
                 Diag.Log("PerformReconnect: FAILED to assign NetService to RunManager");
@@ -290,6 +326,18 @@ public partial class ReconnectRunner : Node
             Diag.Log("HandleDisconnected: (reason unavailable)");
         }
         _disconnectCompletion?.TrySetResult(info);
+    }
+
+    /// <summary>
+    /// 摘掉本 Runner 注册在指定连接上的全部回调。
+    /// 用于「把连接移交给 MenuRejoinFlow 整局重建」之前——本节点随后会 QueueFree，
+    /// 若回调还挂着，之后任何一条消息都会打到已释放的 Godot 节点上。
+    /// </summary>
+    private void DetachHandlers(NetClientGameService svc)
+    {
+        try { svc.Disconnected -= HandleDisconnected; } catch { }
+        try { svc.UnregisterMessageHandler<InitialGameInfoMessage>(HandleInitialGameInfo); } catch { }
+        try { svc.UnregisterMessageHandler<ClientRejoinResponseMessage>(HandleRejoinResponse); } catch { }
     }
 
     private void CleanupNetService()

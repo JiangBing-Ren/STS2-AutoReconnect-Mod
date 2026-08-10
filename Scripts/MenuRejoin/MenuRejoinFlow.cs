@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
+using AutoReconnect.Scripts.Reload;
 using Godot;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer;
@@ -99,6 +101,67 @@ internal static class MenuRejoinFlow
     }
 
     /// <summary>
+    /// v0.9.0 —— 「对局内重连但主机状态已变」时的整局重建。
+    ///
+    /// 典型触发：主机执行了检查点回退（<c>CheckpointRollback</c>），存档被换成更早的快照。
+    /// 此时客机内存里的 run 是**回退之前**的，若沿用 v0.7.0 的「只换 NetService」快路径，
+    /// 客机会带着过期状态继续跑 → 下一次校验和比对必然 StateDivergence。
+    ///
+    /// 做法：先把本地残留的 run 清干净（清理时抑制 Disconnect，保住刚握手成功的新连接），
+    /// 再复用 <see cref="EnterRunFromRejoin"/> 按主机回传的存档整份重建。
+    /// </summary>
+    public static async Task RebuildRunInPlace(INetClientGameService netService, ClientRejoinResponseMessage rejoin)
+    {
+        var rm = RunManager.Instance;
+        if (rm != null && rm.DebugOnlyGetState() != null)
+        {
+            // rm.NetService 此刻还是那条已经死掉的旧连接；CleanUp 会对它调 Disconnect。
+            // 用断连抑制包装统一挡掉，杜绝任何「清理旧局顺手把新连接也拆了」的可能。
+            Diag.Log("[MenuRejoin] 主机状态已变，先清理本地过期 run 再整局重建。");
+            AutoReconnect.Scripts.Net.NetServiceSwapper.CleanUpKeepingConnection(rm, graceful: false);
+
+            // 等一帧，让 CleanUp 触发的节点释放（NOverlayStack/NModalContainer 等）落地。
+            if (Engine.GetMainLoop() is SceneTree tree)
+                await tree.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        }
+
+        await EnterRunFromRejoin(netService, rejoin);
+    }
+
+    /// <summary>
+    /// 读取本地 run 的重载计数（<c>RunManager._numReloads</c>，BaseGame RunManager.cs:74）。
+    ///
+    /// 这是判断「主机的 run 还是不是我手里这一份」的最省事的原生标记：
+    /// <c>SetUpSavedSingleplayer</c> / <c>SetUpSavedMultiplayer</c> 都会先
+    /// <c>SaveManager.IncrementNumReloads(save, …)</c> 再把值灌进来（RunManager.cs:391-392），
+    /// 所以主机每回退一次，它的 NumReloads 就 +1，而客机手里的还是旧值。
+    /// 普通网络抖动重连则两边一致 —— 快路径（只换连接）得以保留。
+    ///
+    /// 返回 -1 表示读不到（反射失败 / 没有 run），调用方应保守处理。
+    /// </summary>
+    public static int GetLocalNumReloads()
+    {
+        try
+        {
+            var rm = RunManager.Instance;
+            if (rm == null || rm.DebugOnlyGetState() == null) return -1;
+            var f = typeof(RunManager).GetField("_numReloads",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (f == null)
+            {
+                Diag.Log("[MenuRejoin] 未找到 RunManager._numReloads 字段（游戏版本变更？）。");
+                return -1;
+            }
+            return f.GetValue(rm) is int v ? v : -1;
+        }
+        catch (Exception ex)
+        {
+            Diag.Log($"[MenuRejoin] 读取本地 NumReloads 失败：{ex.Message}");
+            return -1;
+        }
+    }
+
+    /// <summary>
     /// 用主机回传的存档重建对局并进入。复刻 <c>NMultiplayerLoadGameScreen.StartRun()</c>。
     /// 调用前必须确认：本端没有正在进行的 run（<c>DebugOnlyGetState() == null</c>）。
     /// </summary>
@@ -131,7 +194,7 @@ internal static class MenuRejoinFlow
             // LoadRunLobby 是 SetUpSavedMultiplayer 的入参载体，提供 NetService /
             // InputSynchronizer / Run / Players。用 SerializableRun 重载构造时 Players
             // 是空的，必须自己按存档里的玩家补齐，否则 InitializeRunLobby 会拿到空名单。
-            lobby = new LoadRunLobby(netService, new PassiveRejoinLobbyListener(), run);
+            lobby = new LoadRunLobby(netService, PassiveRejoinLobbyListener.CreateListener(), run);
             foreach (var p in run.Players)
             {
                 lobby.Players.Add(new LoadRunLobbyPlayer
@@ -146,8 +209,13 @@ internal static class MenuRejoinFlow
 
             await game.Transition.FadeOut();
 
-            var runState = RunState.FromSerializable(run);
-            await RunManager.Instance.SetUpSavedMultiplayer(runState, lobby);
+            RejoinSceneReloadGuard.PrepareCurrentHandForSceneSwap();
+            using (RejoinTransitionGuard.SuppressTransitions())
+            using (RejoinSceneReloadGuard.SuppressLateHandLayoutRefresh())
+            using (RejoinSceneReloadGuard.PreserveStableTopBarLocation())
+            {
+                var runState = RunState.FromSerializable(run);
+                await RunManager.Instance.SetUpSavedMultiplayer(runState, lobby);
 
             // v0.7.1 修复：重连客机加载当前房间时，其他玩家早已完成 CombatStateSynchronizer 握手。
             // 若不禁用，客机会永远等待不会重发的 SyncPlayerDataMessage / SyncRngMessage，导致黑屏。
@@ -185,6 +253,7 @@ internal static class MenuRejoinFlow
                 {
                     Diag.Log($"[MenuRejoin] 恢复 CombatStateSynchronizer 失败：{ex.Message}");
                 }
+            }
             }
 
             // disconnectSession: false —— 只注销 lobby 的消息处理器，
@@ -305,20 +374,50 @@ internal static class MenuRejoinFlow
 }
 
 /// <summary>
-/// <see cref="ILoadRunLobbyListener"/> 的空实现。
+/// <see cref="ILoadRunLobbyListener"/> 的动态代理实现（DispatchProxy）。
 ///
 /// 重连场景下不存在「大厅界面」，也没有准备/开始流程需要回调：
 /// run 是我们自己直接拉起来的，不走 <c>BeginRun</c> 那条路。
 /// 这些回调只在 lobby 存活的极短窗口内可能被触发，全部忽略即可。
+///
+/// 使用 DispatchProxy 而非直接实现接口：0.107.1–0.109.1 的 PlayerConnected
+/// 参数是 ulong，0.110 改为 LoadRunLobbyPlayer。直接实现无法同时兼容两种签名，
+/// DispatchProxy 按方法名分发，消除接口签名变更导致的编译/运行硬阻断。
+/// 参考 QuickSL 的 PassiveLoadRunLobbyListener。
 /// </summary>
-internal sealed class PassiveRejoinLobbyListener : ILoadRunLobbyListener
+internal class PassiveRejoinLobbyListener : DispatchProxy
 {
-    public void PlayerConnected(LoadRunLobbyPlayer player) { }
-    public void RemotePlayerDisconnected(ulong playerId) { }
-    public Task<bool> ShouldAllowRunToBegin() => Task.FromResult(true);
-    public void BeginRun() { }
-    public void PlayerReadyChanged(ulong playerId) { }
-    public void LocalPlayerDisconnected(NetErrorInfo info) { }
+    /// <summary>创建一个实现 <see cref="ILoadRunLobbyListener"/> 的动态代理实例。</summary>
+    internal static ILoadRunLobbyListener CreateListener()
+    {
+        return (ILoadRunLobbyListener)DispatchProxy.Create(
+            typeof(ILoadRunLobbyListener),
+            typeof(PassiveRejoinLobbyListener));
+    }
+
+    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+    {
+        if (targetMethod == null)
+            throw new ArgumentNullException(nameof(targetMethod));
+        args ??= Array.Empty<object?>();
+
+        switch (targetMethod.Name)
+        {
+            case "PlayerConnected":
+            case "RemotePlayerDisconnected":
+            case "BeginRun":
+            case "PlayerReadyChanged":
+            case "LocalPlayerDisconnected":
+                return null;
+
+            case "ShouldAllowRunToBegin":
+                return Task.FromResult(true);
+
+            default:
+                Diag.Log($"[MenuRejoin] PassiveRejoinLobbyListener: 未适配的回调 {targetMethod.Name}（已忽略）。");
+                return null;
+        }
+    }
 }
 
 /// <summary>

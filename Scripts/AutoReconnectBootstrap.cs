@@ -16,7 +16,7 @@ internal static class AutoReconnectBootstrap
     {
         Diag.Init();
         Diag.Log("--------------------------------------------");
-        Diag.Log("AutoReconnect v0.7.1 ModuleInitializer 触发");
+        Diag.Log("AutoReconnect v0.9.5-min ModuleInitializer 触发");
         Diag.Log("--------------------------------------------");
 
         HostInfoTracker.Reset();
