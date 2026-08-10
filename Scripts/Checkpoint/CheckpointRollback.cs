@@ -195,7 +195,13 @@ internal static class CheckpointRollback
         }
 
         // 规范化检查点（与 QuickLink 一致：修正本地玩家槽位/序列化版本等）。
-        ulong localPlayerId = PlatformUtil.GetLocalPlayerId(PlatformUtil.PrimaryPlatform);
+        // localPlayerId 必须取「当前对局 NetService 的本地玩家 NetId」而非 PlatformUtil.GetLocalPlayerId：
+        //   - 单人局 NetService = NetSingleplayerGameService，其 NetId = 1（与存档 Players 中的槽位 id 一致）；
+        //   - 多人主机 NetService = Steam 服务，其 NetId = 本地 Steam ID（与存档 Players 中的 steam id 一致）。
+        // 二者均能在 CanonicalizeSave 中命中 save.Players，从而规范化成功。
+        // 若仍用 PlatformUtil.GetLocalPlayerId（= 真实 Steam ID），单人局存档 Players 仅含 id=1，必报
+        //   "Players does not contain local player Id" 而降级回退原始检查点（每局单人回退都打此告警）。
+        ulong localPlayerId = rm!.NetService?.NetId ?? PlatformUtil.GetLocalPlayerId(PlatformUtil.PrimaryPlatform);
         SerializableRun canonical = checkpoint;
         try
         {
